@@ -1,0 +1,14 @@
+OCAML_LIBS = $(OCAML_LIBS_worker)
+
+FILES[] =
+  worker_access
+  worker
+
+OCamlLibrary(worker, $(FILES))
+Meta(worker)
+
+.DEFAULT: META worker.cma worker.cmxa
+
+.PHONY: clean
+clean:
+  rm -f *.o *.a *.cm* *~ *.annot *.run *.opt META $(ATDGEN_OUTFILES)
