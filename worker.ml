@@ -8,12 +8,13 @@ let add_job job =
 let remove_job jobid =
   Worker_access.Job.delete jobid
 
-let create_job start ?expiry action =
+let create_job start ?expiry ?(do_not_retry = false) action =
   let jobid = Jobid.make () in
   let job = {
     jobid;
     start;
     expiry;
+    do_not_retry;
     attempts = 0;
     action;
   } in
@@ -52,7 +53,8 @@ let run_job action_handler job =
        logf `Error "Job %s failed with exception %s"
          (Worker_j.string_of_job job) s;
        remove_job job.jobid >>= fun () ->
-       maybe_retry_later job
+       if job.do_not_retry then return_unit
+       else maybe_retry_later job
     )
 
 let get_oldest () =
