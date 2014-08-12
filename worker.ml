@@ -50,12 +50,21 @@ let run_email_sync_job action_handler job teamid =
       "EMAIL_SYNC_" ^ Uid.to_string uid
     ) (team.team_executive :: team.team_assistants)
   in
-  Redis_mutex.with_mutexes user_keys (fun () ->
-    remove_job job.jobid >>= fun () ->
-    action_handler job.action >>= fun () ->
-    logf `Info "Job completed: %s" (Worker_j.string_of_job job);
-    return ()
-  )
+  catch
+    (fun () ->
+      Redis_mutex.with_mutexes user_keys (fun () ->
+        remove_job job.jobid >>= fun () ->
+        action_handler job.action >>= fun () ->
+        logf `Info "Job completed: %s" (Worker_j.string_of_job job);
+        return ()
+      )
+    )
+    (fun e ->
+      let s = string_of_exn e in
+      logf `Error "Job %s failed with exception %s"
+        (Worker_j.string_of_job job) s;
+      add_job job
+    )
 
 let run_job action_handler job =
   catch
