@@ -40,21 +40,42 @@ let maybe_retry_later job0 =
     (* retry later *)
     add_job job
 
+(* Avoid running an email sync for a team if any of the users
+   are on another team that is currently being email synced. *)
+let run_email_sync_job action_handler job teamid =
+  let open Api_t in
+  User_perm.get_team teamid >>= fun team ->
+  let user_keys =
+    List.map (fun uid ->
+      "EMAIL_SYNC_" ^ Uid.to_string uid
+    ) (team.team_executive :: team.team_assistants)
+  in
+  Redis_mutex.with_mutexes user_keys (fun () ->
+    remove_job job.jobid >>= fun () ->
+    action_handler job.action >>= fun () ->
+    logf `Info "Job completed: %s" (Worker_j.string_of_job job);
+    return ()
+  )
+
 let run_job action_handler job =
   catch
     (fun () ->
-       action_handler job.action >>= fun () ->
-       remove_job job.jobid >>= fun () ->
-       logf `Info "Job completed: %s" (Worker_j.string_of_job job);
-       return ()
+      match job.action with
+      | `Email_sync teamid ->
+          run_email_sync_job action_handler job teamid
+      | _ ->
+          remove_job job.jobid >>= fun () ->
+          action_handler job.action >>= fun () ->
+          logf `Info "Job completed: %s" (Worker_j.string_of_job job);
+          return ()
     )
     (fun e ->
-       let s = string_of_exn e in
-       logf `Error "Job %s failed with exception %s"
-         (Worker_j.string_of_job job) s;
-       remove_job job.jobid >>= fun () ->
-       if job.do_not_retry then return_unit
-       else maybe_retry_later job
+      let s = string_of_exn e in
+      logf `Error "Job %s failed with exception %s"
+        (Worker_j.string_of_job job) s;
+      remove_job job.jobid >>= fun () ->
+      if job.do_not_retry then return_unit
+      else maybe_retry_later job
     )
 
 let get_oldest () =
@@ -70,5 +91,5 @@ let rec run_all action_handler =
   | [] -> return ()
   | l ->
       let jobs = BatList.map (fun (jobid, job, t) -> job) l in
-      Lwt_list.iter_s (run_job action_handler) jobs >>= fun () ->
+      Lwt_list.iter_p (run_job action_handler) jobs >>= fun () ->
       run_all action_handler
