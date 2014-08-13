@@ -69,14 +69,10 @@ let run_email_sync_job action_handler job teamid =
 let run_job action_handler job =
   catch
     (fun () ->
-      match job.action with
-      | `Email_sync teamid ->
-          run_email_sync_job action_handler job teamid
-      | _ ->
-          remove_job job.jobid >>= fun () ->
-          action_handler job.action >>= fun () ->
-          logf `Info "Job completed: %s" (Worker_j.string_of_job job);
-          return ()
+      action_handler job.action >>= fun () ->
+      remove_job job.jobid >>= fun () ->
+      logf `Info "Job completed: %s" (Worker_j.string_of_job job);
+      return ()
     )
     (fun e ->
       let s = string_of_exn e in
@@ -100,5 +96,5 @@ let rec run_all action_handler =
   | [] -> return ()
   | l ->
       let jobs = BatList.map (fun (jobid, job, t) -> job) l in
-      Lwt_list.iter_p (run_job action_handler) jobs >>= fun () ->
+      Lwt_list.iter_s (run_job action_handler) jobs >>= fun () ->
       run_all action_handler
