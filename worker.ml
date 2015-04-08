@@ -57,18 +57,7 @@ let run_job action_handler job =
       else maybe_retry_later job
     )
 
-let get_oldest () =
-  let now = Util_time.now () in
-  Worker_access.Job.get_page
-    ~direction: `Asc
-    ~max_ord: now
-    ~max_count: 1000
-    ()
-
-let rec run_all action_handler =
-  get_oldest () >>= function
-  | [] -> return ()
-  | l ->
-      let jobs = BatList.map (fun (jobid, job, t) -> job) l in
-      Lwt_list.iter_s (run_job action_handler) jobs >>= fun () ->
-      run_all action_handler
+let run_all action_handler =
+  Worker_access.Job.iter ~max_ord: (Util_time.now ()) (fun (jobid, job, t) ->
+    run_job action_handler job
+  )
