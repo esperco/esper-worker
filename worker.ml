@@ -28,7 +28,7 @@ let maybe_retry_later job0 =
   let job = { job0 with start; attempts } in
   let expired =
     match job.expiry with
-    | Some t when Util_time.Op.(>) start t -> true
+    | Some t when Util_time.(>) start t -> true
     | _ -> false
   in
   if expired || attempts > 100 then (
