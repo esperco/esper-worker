@@ -2,6 +2,12 @@ open Log
 open Lwt
 open Worker_t
 
+let get_job jobid =
+  Worker_access.Job.get jobid
+
+let job_exists jobid =
+  Worker_access.Job.exists jobid
+
 let add_job job =
   Worker_access.Job.put job.jobid job
 
@@ -43,8 +49,8 @@ let maybe_retry_later job0 =
 let run_job action_handler job =
   catch
     (fun () ->
-      action_handler job.action >>= fun () ->
       remove_job job.jobid >>= fun () ->
+      action_handler job.action >>= fun () ->
       logf `Info "Job completed: %s" (Worker_j.string_of_job job);
       return ()
     )
@@ -52,7 +58,6 @@ let run_job action_handler job =
       let s = string_of_exn e in
       logf `Error "Job %s failed with exception %s"
         (Worker_j.string_of_job job) s;
-      remove_job job.jobid >>= fun () ->
       if job.do_not_retry then return_unit
       else maybe_retry_later job
     )
