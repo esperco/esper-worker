@@ -5,26 +5,36 @@
    and executes the jobs whose time has come.
 *)
 
-val get_job : Worker_t.jobid -> Worker_t.job option Lwt.t
-val remove_job : Worker_t.jobid -> unit Lwt.t
+val get_job : Worker_jobid.t -> Worker_t.job option Lwt.t
+val remove_job : Worker_jobid.t -> unit Lwt.t
 
 type json = string
 
-(* TODO: provide a way to not overwrite a given job unless it is
-   an intentional reschedule *)
 val schedule_job :
   ?expiry:Worker_t.timestamp ->
   ?do_not_retry:bool ->
-  Worker_t.jobid ->
+  Worker_jobid.t ->
   Worker_t.timestamp (* when the job should run *) ->
   string (* name of the handler that should handle the job data *) ->
   json (* job data (JSON) *) ->
   Worker_t.job Lwt.t
-  (* Schedule or reschedule a job.
-     Job IDs are created with the Worker_jobid module. *)
+  (* Schedule a job. Fail is a job with this ID is already scheduled.
+     Job IDs are created with the Worker_jobid module.
+  *)
+
+val reschedule_job :
+  ?expiry:Worker_t.timestamp ->
+  ?do_not_retry:bool ->
+  Worker_jobid.t ->
+  Worker_t.timestamp ->
+  string ->
+  json ->
+  Worker_t.job Lwt.t
+  (* Same as `schedule_job` but doesn't fail if a job is already
+     scheduled with this ID. *)
 
 val register_job_handler :
-  string -> (Worker_t.jobid -> json -> bool Lwt.t) -> unit
+  string -> (Worker_jobid.t -> json -> bool Lwt.t) -> unit
   (* Usage: `register_job_handler job_type handler`.
      The handler interprets the json data of the job specification
      and returns whether the job with this ID should be removed

@@ -18,22 +18,44 @@ let job_exists jobid =
 let add_job job =
   Worker_access.Job.put job.jobid job
 
+let update_job jobid f =
+  Worker_access.Job.update jobid f
+
 let remove_job jobid =
   Worker_access.Job.delete jobid
 
-let schedule_job
+let schedule_job_gen
+    ~reschedule
     ?expiry ?(do_not_retry = false)
-    jobid start action_name action_json =
-  let job = {
-    jobid;
-    start;
-    expiry;
-    do_not_retry;
-    attempts = 0;
-    action = (action_name, action_json);
-  } in
-  add_job job >>= fun () ->
-  return job
+    jobid start job_type job_spec_json =
+  update_job jobid (function
+    | Some _ when not reschedule ->
+        failwith
+          (sprintf
+             "Worker.schedule: a job with ID %s is already scheduled"
+             (Worker_jobid.to_string jobid)
+          )
+    | _ ->
+        let job = {
+          jobid;
+          start;
+          expiry;
+          do_not_retry;
+          attempts = 0;
+          action = (job_type, job_spec_json);
+        } in
+        return (Some job, job)
+  )
+
+let schedule_job ?expiry ?do_not_retry jobid start job_type job_spec_json =
+  schedule_job_gen
+    ~reschedule:false
+    ?expiry ?do_not_retry jobid start job_type job_spec_json
+
+let reschedule_job ?expiry ?do_not_retry jobid start job_type job_spec_json =
+  schedule_job_gen
+    ~reschedule:true
+    ?expiry ?do_not_retry jobid start job_type job_spec_json
 
 let maybe_retry_later job0 =
   let now = Util_time.now () in
