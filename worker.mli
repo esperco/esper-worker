@@ -23,8 +23,15 @@ val schedule_job :
   (* Schedule or reschedule a job.
      Job IDs are created with the Worker_jobid module. *)
 
-val run_all :
-  (Worker_jobid.t -> string -> json -> bool Lwt.t) -> unit Lwt.t
+val register_job_handler :
+  string -> (Worker_t.jobid -> json -> bool Lwt.t) -> unit
+  (* Usage: `register_job_handler job_type handler`.
+     The handler interprets the json data of the job specification
+     and returns whether the job with this ID should be removed
+     from the table after execution (see `run_all)`.
+  *)
+
+val run_all : unit -> unit Lwt.t
   (* Run all the jobs whose time has come.
 
      The handler is called as [handler jobid action_type action_details]

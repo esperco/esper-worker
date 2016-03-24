@@ -2,6 +2,7 @@
    System for scheduling jobs at specific times in the future.
 *)
 
+open Printf
 open Log
 open Lwt
 open Worker_t
@@ -53,14 +54,38 @@ let maybe_retry_later job0 =
     (* retry later *)
     add_job job
 
-let run_job action_handler job =
+let job_handlers = Hashtbl.create 10
+
+let register_job_handler job_type job_handler =
+  if Hashtbl.mem job_handlers job_type then
+    invalid_arg (
+      sprintf
+        "Worker.register_job_handler: a handler for job type %s is \
+         already registered."
+        job_type
+    )
+  else
+    Hashtbl.add job_handlers job_type job_handler
+
+let get_job_handler job_type =
+  try Some (Hashtbl.find job_handlers job_type)
+  with Not_found -> None
+
+let run_job job =
   let jobid = job.jobid in
   catch
     (fun () ->
        remove_job jobid >>= fun () ->
-       let action_name, action_json = job.action in
+       let job_type, job_spec = job.action in
+       let job_handler =
+         match get_job_handler job_type with
+         | Some job_handler ->
+             job_handler
+         | None ->
+             failwith ("Unknown job type: " ^ job_type)
+       in
        Cloudwatch.time "wolverine.worker.job" (fun () ->
-         action_handler jobid action_name action_json
+         job_handler jobid job_spec
        ) >>= fun may_remove_job ->
        logf `Info "Job completed: %s" (Worker_j.string_of_job job);
        if may_remove_job then
@@ -78,7 +103,7 @@ let run_job action_handler job =
          maybe_retry_later job
     )
 
-let run_all action_handler =
+let run_all () =
   Worker_access.Job.iter ~max_ord: (Util_time.now ()) (fun (jobid, job, t) ->
-    run_job action_handler job
+    run_job job
   )
