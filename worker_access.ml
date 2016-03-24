@@ -1,7 +1,7 @@
-(* table of actions to be executed sometime in the future *)
+(* Table of actions to be executed sometime in the future *)
 module Job = Mysql_access_kv.Make (struct
   let tblname = "job"
-  module Key = Jobid
+  module Key = Worker_jobid
   module Value = struct
     type t = Worker_t.job
     let of_string = Worker_j.job_of_string

@@ -1,9 +1,14 @@
 OCAML_LIBS = $(OCAML_LIBS_worker)
 
 FILES[] =
+  worker_jobid
+  worker_t
+  worker_j
+  worker_v
   worker_access
   worker
 
+Atdgen(worker, -j-std)
 OCamlLibrary(worker, $(FILES))
 Meta(worker)
 

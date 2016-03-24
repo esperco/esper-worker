@@ -14,15 +14,16 @@ let add_job job =
 let remove_job jobid =
   Worker_access.Job.delete jobid
 
-let create_job start ?expiry ?(do_not_retry = false) action =
-  let jobid = Jobid.make () in
+let schedule_job
+    ?expiry ?(do_not_retry = false)
+    jobid start action_name action_json =
   let job = {
     jobid;
     start;
     expiry;
     do_not_retry;
     attempts = 0;
-    action;
+    action = (action_name, action_json);
   } in
   add_job job >>= fun () ->
   return job
@@ -50,7 +51,10 @@ let run_job action_handler job =
   catch
     (fun () ->
       remove_job job.jobid >>= fun () ->
-      action_handler job.action >>= fun () ->
+      let action_name, action_json = job.action in
+      Cloudwatch.time "wolverine.worker.job" (fun () ->
+        action_handler action_name action_json
+      ) >>= fun () ->
       logf `Info "Job completed: %s" (Worker_j.string_of_job job);
       return ()
     )
