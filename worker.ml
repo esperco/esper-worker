@@ -1,6 +1,12 @@
+(*
+   System for scheduling jobs at specific times in the future.
+*)
+
 open Log
 open Lwt
 open Worker_t
+
+type json = string
 
 let get_job jobid =
   Worker_access.Job.get jobid
