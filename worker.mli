@@ -18,6 +18,8 @@ val schedule_job :
   string (* name of the handler that should handle the job data *) ->
   json (* job data (JSON) *) ->
   Worker_t.job Lwt.t
+  (* Schedule or reschedule a job.
+     Job IDs are created with the Worker_jobid module. *)
 
 val run_all : (string -> Worker_t.json -> unit Lwt.t) -> unit Lwt.t
   (* Run all the jobs whose time has come. *)
