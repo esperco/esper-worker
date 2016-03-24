@@ -10,6 +10,8 @@ val remove_job : Worker_t.jobid -> unit Lwt.t
 
 type json = string
 
+(* TODO: provide a way to not overwrite a given job unless it is
+   an intentional reschedule *)
 val schedule_job :
   ?expiry:Worker_t.timestamp ->
   ?do_not_retry:bool ->
@@ -21,5 +23,15 @@ val schedule_job :
   (* Schedule or reschedule a job.
      Job IDs are created with the Worker_jobid module. *)
 
-val run_all : (string -> Worker_t.json -> unit Lwt.t) -> unit Lwt.t
-  (* Run all the jobs whose time has come. *)
+val run_all :
+  (Worker_jobid.t -> string -> json -> bool Lwt.t) -> unit Lwt.t
+  (* Run all the jobs whose time has come.
+
+     The handler is called as [handler jobid action_type action_details]
+     and returns a boolean that indicates whether the job should
+     be removed from the table upon success. Returning false
+     allows the job to rescheduled at some future date by the handler itself.
+
+     If the handler raises an exception, the job is removed from the table
+     unless it is scheduled for a retry.
+  *)

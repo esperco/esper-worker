@@ -47,29 +47,35 @@ let maybe_retry_later job0 =
   if expired || attempts > 100 then (
     (* give up *)
     logf `Error "Giving up on job %s" (Worker_j.string_of_job job);
-    return ();
+    remove_job job0.jobid
   )
   else
     (* retry later *)
     add_job job
 
 let run_job action_handler job =
+  let jobid = job.jobid in
   catch
     (fun () ->
-      remove_job job.jobid >>= fun () ->
-      let action_name, action_json = job.action in
-      Cloudwatch.time "wolverine.worker.job" (fun () ->
-        action_handler action_name action_json
-      ) >>= fun () ->
-      logf `Info "Job completed: %s" (Worker_j.string_of_job job);
-      return ()
+       remove_job jobid >>= fun () ->
+       let action_name, action_json = job.action in
+       Cloudwatch.time "wolverine.worker.job" (fun () ->
+         action_handler jobid action_name action_json
+       ) >>= fun may_remove_job ->
+       logf `Info "Job completed: %s" (Worker_j.string_of_job job);
+       if may_remove_job then
+         remove_job jobid
+       else
+         return ()
     )
     (fun e ->
-      let s = string_of_exn e in
-      logf `Error "Job %s failed with exception %s"
-        (Worker_j.string_of_job job) s;
-      if job.do_not_retry then return_unit
-      else maybe_retry_later job
+       let s = string_of_exn e in
+       logf `Error "Job %s failed with exception %s"
+         (Worker_j.string_of_job job) s;
+       if job.do_not_retry then
+         remove_job jobid
+       else
+         maybe_retry_later job
     )
 
 let run_all action_handler =
