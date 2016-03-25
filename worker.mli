@@ -12,7 +12,7 @@ type json = string
 
 val schedule_job :
   ?expiry:Worker_t.timestamp ->
-  ?do_not_retry:bool ->
+  ?max_attempts:int ->
   Worker_jobid.t ->
   Worker_t.timestamp (* when the job should run *) ->
   string (* name of the handler that should handle the job data *) ->
@@ -24,14 +24,16 @@ val schedule_job :
 
 val reschedule_job :
   ?expiry:Worker_t.timestamp ->
-  ?do_not_retry:bool ->
+  ?max_attempts:int ->
   Worker_jobid.t ->
   Worker_t.timestamp ->
   string ->
   json ->
   Worker_t.job Lwt.t
   (* Same as `schedule_job` but doesn't fail if a job is already
-     scheduled with this ID. *)
+     scheduled with this ID.
+     This is not the same as an automatic retry due to an uncaught
+     exception. The number of attempts is reset to 0. *)
 
 val register_job_handler :
   string -> (Worker_jobid.t -> json -> bool Lwt.t) -> unit

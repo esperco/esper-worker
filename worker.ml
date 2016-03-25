@@ -26,7 +26,7 @@ let remove_job jobid =
 
 let schedule_job_gen
     ~reschedule
-    ?expiry ?(do_not_retry = false)
+    ?expiry ?(max_attempts = 5)
     jobid start job_type job_spec_json =
   update_job jobid (function
     | Some _ when not reschedule ->
@@ -40,22 +40,22 @@ let schedule_job_gen
           jobid;
           start;
           expiry;
-          do_not_retry;
+          max_attempts;
           attempts = 0;
           action = (job_type, job_spec_json);
         } in
         return (Some job, job)
   )
 
-let schedule_job ?expiry ?do_not_retry jobid start job_type job_spec_json =
+let schedule_job ?expiry ?max_attempts jobid start job_type job_spec_json =
   schedule_job_gen
     ~reschedule:false
-    ?expiry ?do_not_retry jobid start job_type job_spec_json
+    ?expiry ?max_attempts jobid start job_type job_spec_json
 
-let reschedule_job ?expiry ?do_not_retry jobid start job_type job_spec_json =
+let reschedule_job ?expiry ?max_attempts jobid start job_type job_spec_json =
   schedule_job_gen
     ~reschedule:true
-    ?expiry ?do_not_retry jobid start job_type job_spec_json
+    ?expiry ?max_attempts jobid start job_type job_spec_json
 
 let maybe_retry_later job0 =
   let now = Util_time.now () in
@@ -67,7 +67,7 @@ let maybe_retry_later job0 =
     | Some t when Util_time.(>) start t -> true
     | _ -> false
   in
-  if expired || attempts > 100 then (
+  if expired || attempts >= job0.max_attempts then (
     (* give up *)
     logf `Error "Giving up on job %s" (Worker_j.string_of_job job);
     remove_job job0.jobid
@@ -119,10 +119,7 @@ let run_job job =
        let s = string_of_exn e in
        logf `Error "Job %s failed with exception %s"
          (Worker_j.string_of_job job) s;
-       if job.do_not_retry then
-         remove_job jobid
-       else
-         maybe_retry_later job
+       maybe_retry_later job
     )
 
 let run_all () =

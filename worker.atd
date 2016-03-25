@@ -14,8 +14,8 @@ type job = {
     (* date after which we should start trying to perform the action *)
   ?expiry: timestamp option;
     (* date after which we should stop trying *)
-  ~do_not_retry: bool;
-    (* if true, we will attempt this job only once *)
+  ~max_attempts <ocaml default="5">: int;
+    (* maximum number of attempts *)
   attempts: int;
     (* number of attempts so far *)
   action: (string * json);
