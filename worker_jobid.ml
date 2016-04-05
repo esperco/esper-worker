@@ -2,6 +2,9 @@
 
 type t = {
   namespace: string;
+    (* For compatibility with old job IDs found in production without
+       a namespace, this string can be empty.
+       Newly-formed job IDs must have a valid namespace. *)
   id: string;
 }
 
@@ -28,14 +31,36 @@ let make ~namespace ?(id = Random_id.(to_string (make ()))) () =
 
 let of_string s =
   let namespace, id =
-    try BatString.split s ~by:":"
-    with Not_found -> "default", s
+    try
+      let namespace, id = BatString.split s ~by:":" in
+      check_namespace namespace;
+      namespace, id
+    with Not_found ->
+      Log.logf `Warning "Missing namespace in job ID %S." s;
+      "", s
   in
-  check_namespace namespace;
   { namespace; id }
 
 let to_string x =
-  x.namespace ^ ":" ^ x.id
+  match x.namespace with
+  | "" ->
+      let s = x.id in
+      Log.logf `Warning "Missing namespace in job ID %S." s;
+      s
+  | namespace ->
+      namespace ^ ":" ^ x.id
 
 let wrap   = of_string
 let unwrap = to_string
+
+let test () =
+  assert (to_string (of_string "abc") = "abc");
+  assert (to_string (of_string "abc:cde") = "abc:cde");
+  assert (of_string "abc:cde" = { namespace = "abc"; id = "cde" });
+  assert (try ignore (of_string "ab\nc:cd"); false with _ -> true);
+  assert (try ignore (of_string ":c"); false with _ -> true);
+  true
+
+let tests = [
+  "worker job ID", test;
+]

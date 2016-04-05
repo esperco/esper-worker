@@ -16,3 +16,6 @@ val to_string : t -> string
 
 val wrap : string -> t
 val unwrap : t -> string
+
+val test : unit -> bool
+val tests : (string * (unit -> bool)) list
