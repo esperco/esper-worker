@@ -97,7 +97,6 @@ let run_job job =
   let jobid = job.jobid in
   catch
     (fun () ->
-       remove_job jobid >>= fun () ->
        let job_type, job_spec = job.action in
        let job_handler =
          match get_job_handler job_type with
