@@ -7,6 +7,7 @@ FILES[] =
   worker_v
   worker_access
   worker
+  worker_main
 
 Atdgen(worker, -j-std)
 OCamlLibrary(worker, $(FILES))
