@@ -9,6 +9,8 @@ open Worker_t
 
 type json = string
 
+let default_max_attempts = 5
+
 let get_job jobid =
   Worker_access.Job.get jobid
 
@@ -25,16 +27,20 @@ let remove_job jobid =
   Worker_access.Job.delete jobid
 
 let schedule_job_gen
+    ~ignore_if_exists
     ~reschedule
-    ?expiry ?(max_attempts = 5)
+    ?expiry ?(max_attempts = default_max_attempts)
     jobid start job_type job_spec_json =
   update_job jobid (function
-    | Some _ when not reschedule ->
-        failwith
-          (sprintf
-             "Worker.schedule: a job with ID %s is already scheduled"
-             (Worker_jobid.to_string jobid)
-          )
+    | Some job when not reschedule ->
+        if ignore_if_exists then
+          return (None, job)
+        else
+          failwith
+            (sprintf
+               "Worker.schedule: a job with ID %s is already scheduled"
+               (Worker_jobid.to_string jobid)
+            )
     | _ ->
         let job = {
           jobid;
@@ -47,14 +53,20 @@ let schedule_job_gen
         return (Some job, job)
   )
 
-let schedule_job ?expiry ?max_attempts jobid start job_type job_spec_json =
+let schedule_job
+    ?(ignore_if_exists = true)
+    ?expiry
+    ?max_attempts
+    jobid start job_type job_spec_json =
   schedule_job_gen
-    ~reschedule:false
+    ~ignore_if_exists
+    ~reschedule: false
     ?expiry ?max_attempts jobid start job_type job_spec_json
 
 let reschedule_job ?expiry ?max_attempts jobid start job_type job_spec_json =
   schedule_job_gen
-    ~reschedule:true
+    ~ignore_if_exists: false (* not applicable *)
+    ~reschedule: true
     ?expiry ?max_attempts jobid start job_type job_spec_json
 
 let maybe_retry_later job0 =

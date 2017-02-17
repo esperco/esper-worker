@@ -10,7 +10,11 @@ val remove_job : Worker_jobid.t -> unit Lwt.t
 
 type json = string
 
+val default_max_attempts : int
+  (* Default value of the `max_attempts` parameter *)
+
 val schedule_job :
+  ?ignore_if_exists:bool ->
   ?expiry:Worker_t.timestamp ->
   ?max_attempts:int ->
   Worker_jobid.t ->
@@ -18,7 +22,9 @@ val schedule_job :
   string (* name of the handler that should handle the job data *) ->
   json (* job data (JSON) *) ->
   Worker_t.job Lwt.t
-  (* Schedule a job. Fail is a job with this ID is already scheduled.
+  (* Schedule a job.
+     Fail if a job with this ID is already scheduled,
+     unless `ignore_if_exists` is true.
      Job IDs are created with the Worker_jobid module.
   *)
 
@@ -31,7 +37,7 @@ val reschedule_job :
   json ->
   Worker_t.job Lwt.t
   (* Same as `schedule_job` but doesn't fail if a job is already
-     scheduled with this ID.
+     scheduled with this ID, in which case the previous job is rescheduled.
      This is not the same as an automatic retry due to an uncaught
      exception. The number of attempts is reset to 0. *)
 
