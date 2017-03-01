@@ -104,7 +104,7 @@ let run_all_scheduled_jobs () =
     if !jobs <> [] then (
       logf `Info "New round of jobs using fake scheduler at pretend date %s"
         (Util_time.to_string (now ()));
-      Worker.run_all () >>= fun () ->
+      Worker.run_due_jobs () >>= fun () ->
       loop ()
     )
     else

@@ -23,6 +23,6 @@ let main ~offset =
         return ()
     | false ->
         Apputil_worker.save_pid pid_file;
-        Worker.run_all ()
+        Worker.run_due_jobs ()
   in
   Util_lwt_main.run job

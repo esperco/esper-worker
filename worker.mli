@@ -32,6 +32,7 @@ val scheduler : scheduler ref
      It can be replaced by an alternate scheduler for testing purposes.
   *)
 
+val get_job : Worker_jobid.t -> Worker_t.job option Lwt.t
 val add_job : Worker_t.job -> unit Lwt.t
 val remove_job : Worker_jobid.t -> unit Lwt.t
 
@@ -76,7 +77,7 @@ val register_job_handler :
      from the table after execution (see `run_all)`.
   *)
 
-val run_all : unit -> unit Lwt.t
+val run_due_jobs : unit -> unit Lwt.t
   (* Run all the jobs whose time has come.
 
      The handler is called as [handler jobid action_type action_details]

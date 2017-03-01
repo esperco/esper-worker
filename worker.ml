@@ -52,8 +52,9 @@ let real_scheduler = new scheduler
 (* Could be substituted by another scheduling engine for testing purpose *)
 let scheduler = ref real_scheduler
 
+let get_job jobid = !scheduler#get_job jobid
 let add_job job = !scheduler#add_job job
-let remove_job job = !scheduler#remove_job job
+let remove_job jobid = !scheduler#remove_job jobid
 let now () = !scheduler#now ()
 
 let schedule_job_gen
@@ -163,5 +164,5 @@ let run_job job =
        maybe_retry_later job
     )
 
-let run_all () =
+let run_due_jobs () =
   !scheduler#run_due_jobs run_job
