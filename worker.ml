@@ -11,27 +11,57 @@ type json = string
 
 let default_max_attempts = 5
 
-let get_job jobid =
-  Worker_access.Job.get jobid
+class scheduler =
+  let now () = Util_time.now () in
+  object
+    method is_real = true
 
-let job_exists jobid =
-  Worker_access.Job.exists jobid
+    method now () =
+      Util_time.now ()
 
-let add_job job =
-  Worker_access.Job.put job.jobid job
+    method get_job jobid =
+      Worker_access.Job.get jobid
 
-let update_job jobid f =
-  Worker_access.Job.update jobid f
+    method job_exists jobid =
+      Worker_access.Job.exists jobid
 
-let remove_job jobid =
-  Worker_access.Job.delete jobid
+    method add_job job =
+      Worker_access.Job.put job.jobid job
+
+    method remove_job jobid =
+      Worker_access.Job.delete jobid
+
+    method update_job :
+      'a. jobid ->
+          (job option ->
+          (job option * 'a) Lwt.t) ->
+          'a Lwt.t =
+      fun jobid f ->
+        Worker_access.Job.update jobid f
+
+    method run_due_jobs run_job =
+      Worker_access.Job.iter
+        ~max_ord: (now ())
+        (fun (jobid, job, t) ->
+           run_job job
+        )
+  end
+
+let real_scheduler = new scheduler
+
+(* Could be substituted by another scheduling engine for testing purpose *)
+let scheduler = ref real_scheduler
+
+let add_job job = !scheduler#add_job job
+let remove_job job = !scheduler#remove_job job
+let now () = !scheduler#now ()
 
 let schedule_job_gen
     ~ignore_if_exists
     ~reschedule
     ?expiry ?(max_attempts = default_max_attempts)
     jobid start job_type job_spec_json =
-  update_job jobid (function
+  !scheduler#update_job jobid (function
     | Some job when not reschedule ->
         if ignore_if_exists then
           return (None, job)
@@ -70,7 +100,7 @@ let reschedule_job ?expiry ?max_attempts jobid start job_type job_spec_json =
     ?expiry ?max_attempts jobid start job_type job_spec_json
 
 let maybe_retry_later job0 =
-  let now = Util_time.now () in
+  let now = !scheduler#now () in
   let start = Util_time.add now 3600. in (* retry in one hour *)
   let attempts = job0.attempts + 1 in
   let job = { job0 with start; attempts } in
@@ -82,11 +112,11 @@ let maybe_retry_later job0 =
   if expired || attempts >= job0.max_attempts then (
     (* give up *)
     logf `Error "Giving up on job %s" (Worker_j.string_of_job job);
-    remove_job job0.jobid
+    !scheduler#remove_job job0.jobid
   )
   else
     (* retry later *)
-    add_job job
+    !scheduler#add_job job
 
 let job_handlers = Hashtbl.create 10
 
@@ -122,7 +152,7 @@ let run_job job =
        ) >>= fun may_remove_job ->
        logf `Info "Job completed: %s" (Worker_j.string_of_job job);
        if may_remove_job then
-         remove_job jobid
+         !scheduler#remove_job jobid
        else
          return ()
     )
@@ -134,6 +164,4 @@ let run_job job =
     )
 
 let run_all () =
-  Worker_access.Job.iter ~max_ord: (Util_time.now ()) (fun (jobid, job, t) ->
-    run_job job
-  )
+  !scheduler#run_due_jobs run_job

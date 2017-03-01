@@ -5,7 +5,34 @@
    and executes the jobs whose time has come.
 *)
 
-val get_job : Worker_jobid.t -> Worker_t.job option Lwt.t
+(* Those methods are not meant to be called directly from outside. *)
+class type scheduler =
+  object
+    method is_real : bool
+    method now : unit -> Util_time.t
+    method get_job : Worker_jobid.t -> Worker_t.job option Lwt.t
+    method job_exists : Worker_jobid.t -> bool Lwt.t
+    method add_job : Worker_t.job -> unit Lwt.t
+    method remove_job : Worker_jobid.t -> unit Lwt.t
+    method update_job :
+      'a. Worker_t.jobid ->
+          (Worker_t.job option ->
+          (Worker_t.job option * 'a) Lwt.t) ->
+          'a Lwt.t
+
+    method run_due_jobs : (Worker_t.job -> unit Lwt.t) -> unit Lwt.t
+  end
+
+val real_scheduler : scheduler
+
+val scheduler : scheduler ref
+  (* The current scheduler in use. It is initially set to `real_scheduler`
+     which uses a MySQL table and real time.
+
+     It can be replaced by an alternate scheduler for testing purposes.
+  *)
+
+val add_job : Worker_t.job -> unit Lwt.t
 val remove_job : Worker_jobid.t -> unit Lwt.t
 
 type json = string
