@@ -25,6 +25,9 @@ let update_current_time () =
       if Util_time.compare !current_time t < 0 then
         current_time := t
 
+let reset_current_time () =
+  current_time := Util_time.now ()
+
 (*
    The current time is the start date of the first job, unless it's already
    in the past.
@@ -40,7 +43,7 @@ let job_exists jobid =
   BatList.exists (fun x -> x.jobid = jobid) !jobs
 
 let remove_job jobid =
-  jobs := BatList.filter (fun x -> x.jobid = jobid) !jobs
+  jobs := BatList.filter (fun x -> x.jobid <> jobid) !jobs
 
 let add_job job =
   remove_job job.jobid;
@@ -99,7 +102,6 @@ let activate () =
    as much as necessary between steps.
 *)
 let run_all_scheduled_jobs () =
-  assert (not !Worker.scheduler#is_real);
   let rec loop () =
     if !jobs <> [] then (
       logf `Info "New round of jobs using fake scheduler at pretend date %s"
@@ -110,6 +112,9 @@ let run_all_scheduled_jobs () =
     else
       return ()
   in
+  assert (not !Worker.scheduler#is_real);
+  logf `Info "Running all fake-scheduled jobs.";
+  reset_current_time ();
   loop () >>= fun () ->
   logf `Info "Done running all fake-scheduled jobs.";
   return ()
