@@ -32,6 +32,13 @@ val scheduler : scheduler ref
      It can be replaced by an alternate scheduler for testing purposes.
   *)
 
+val time : unit -> float
+val now : unit -> Util_time.t
+  (* Return the current time, according to the scheduler, which
+     may be much later than the time returned by Unix.time
+     or Unix.gettimeofday if we're using the fake scheduler
+     (Worker_simulator). *)
+
 val get_job : Worker_jobid.t -> Worker_t.job option Lwt.t
 val add_job : Worker_t.job -> unit Lwt.t
 val remove_job : Worker_jobid.t -> unit Lwt.t

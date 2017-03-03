@@ -52,9 +52,26 @@ let real_scheduler = new scheduler
 (* Could be substituted by another scheduling engine for testing purpose *)
 let scheduler = ref real_scheduler
 
+let now () = !scheduler#now ()
+let time () = Util_time.to_float (now ())
+
 let get_job jobid = !scheduler#get_job jobid
-let add_job job = !scheduler#add_job job
-let remove_job jobid = !scheduler#remove_job jobid
+
+let add_job job =
+  Log.debug (fun () ->
+    sprintf "Schedule job %s for %s"
+      (Worker_jobid.to_string job.jobid)
+      (Util_time.to_string job.start)
+  );
+  !scheduler#add_job job
+
+let remove_job jobid =
+  Log.debug (fun () ->
+    sprintf "Unschedule job %s"
+      (Worker_jobid.to_string jobid)
+  );
+  !scheduler#remove_job jobid
+
 let now () = !scheduler#now ()
 
 let schedule_job_gen
@@ -113,11 +130,11 @@ let maybe_retry_later job0 =
   if expired || attempts >= job0.max_attempts then (
     (* give up *)
     logf `Error "Giving up on job %s" (Worker_j.string_of_job job);
-    !scheduler#remove_job job0.jobid
+    remove_job job0.jobid
   )
   else
     (* retry later *)
-    !scheduler#add_job job
+    add_job job
 
 let job_handlers = Hashtbl.create 10
 
@@ -153,7 +170,7 @@ let run_job job =
        ) >>= fun may_remove_job ->
        logf `Info "Job completed: %s" (Worker_j.string_of_job job);
        if may_remove_job then
-         !scheduler#remove_job jobid
+         remove_job jobid
        else
          return ()
     )
