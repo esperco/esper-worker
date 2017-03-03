@@ -100,13 +100,18 @@ let activate () =
 (*
    Run all scheduled jobs in a correct order, advancing the clock
    as much as necessary between steps.
+
+   The `when_cycle_done` function is run at the end of each cycle,
+   allowing user code to react to new state of the system.
 *)
-let run_all_scheduled_jobs () =
+let run_all_scheduled_jobs ?(when_cycle_done = fun t -> return ()) () =
   let rec loop () =
     if !jobs <> [] then (
+      let t = now () in
       logf `Info "New round of jobs using fake scheduler at pretend date %s"
-        (Util_time.to_string (now ()));
+        (Util_time.to_string t);
       Worker.run_due_jobs () >>= fun () ->
+      when_cycle_done t >>= fun () ->
       loop ()
     )
     else
