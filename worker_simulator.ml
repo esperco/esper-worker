@@ -44,7 +44,7 @@ let reset () =
    in the past.
 *)
 let now () =
-  update_current_time ();
+  reset_current_time ();
   !current_time
 
 let sort l =
