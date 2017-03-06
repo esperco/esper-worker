@@ -67,7 +67,7 @@ let add_job job =
 
 let remove_job jobid =
   Log.debug (fun () ->
-    sprintf "Unschedule job %s"
+    sprintf "Remove job %s"
       (Worker_jobid.to_string jobid)
   );
   !scheduler#remove_job jobid

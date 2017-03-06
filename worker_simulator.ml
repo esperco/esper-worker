@@ -28,23 +28,14 @@ let update_current_time () =
 let reset_current_time () =
   current_time := Util_time.now ()
 
-(* Remove any scheduled jobs *)
-let clear () =
+let remove_all_jobs () =
   jobs := []
-
-(*
-   Prepare for a fresh run
-*)
-let reset () =
-  clear ();
-  reset_current_time ()
 
 (*
    The current time is the start date of the first job, unless it's already
    in the past.
 *)
 let now () =
-  reset_current_time ();
   !current_time
 
 let sort l =
@@ -118,9 +109,11 @@ let activate () =
 let run_all_scheduled_jobs ?(when_cycle_done = fun t -> return ()) () =
   let rec loop () =
     if !jobs <> [] then (
+      update_current_time ();
       let t = now () in
-      logf `Info "New round of jobs using fake scheduler at pretend date %s"
-        (Util_time.to_string t);
+      logf `Info "Fake scheduler time: %s; %i jobs"
+        (Util_time.to_string t)
+        (List.length !jobs);
       Worker.run_due_jobs () >>= fun () ->
       when_cycle_done t >>= fun () ->
       loop ()
@@ -130,7 +123,7 @@ let run_all_scheduled_jobs ?(when_cycle_done = fun t -> return ()) () =
   in
   assert (not !Worker.scheduler#is_real);
   logf `Info "Running all fake-scheduled jobs.";
-  reset ();
+  reset_current_time ();
   loop () >>= fun () ->
   logf `Info "Done running all fake-scheduled jobs.";
   return ()
