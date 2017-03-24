@@ -48,24 +48,30 @@ type json = string
 val default_max_attempts : int
   (* Default value of the `max_attempts` parameter *)
 
+type scheduling_mode = [
+  | `New
+    (* A job with the specified ID must not already exist,
+       otherwise an exception is raised. *)
+
+  | `Ignore_if_exists
+    (* If a job with the specified ID already exists,
+       the new job specification is ignored and the
+       old job found in the table is returned.
+       In this case, the exiting job is unaffected and in particular,
+       the number of retries and the maximum number of retries
+       are not reset. *)
+
+  | `Reschedule
+    (* Replace an existing job with a new specification and new parameters
+       or create a new one.
+       All job parameters are reset and the internal counter for
+       the number of attempts is reset to zero. *)
+]
+
 (*
-   Schedule a new job.
-
-   Use `reschedule_job` instead if the new job specification should silently
-   override any existing job.
-
-   If there is already a job with this job ID:
-
-   - The default behavior is to treat this as an error and raise an exception.
-
-   - An alternate behavior can be obtained by setting the `ignore_if_exists`
-     flag. In this case, the new job specification is ignored and the
-     old job found in the table is returned. In this case, the exiting
-     job is unaffected and in particular, the number of retries
-     and the maximum number of retries (`max_attempts`) are not reset.
+   Schedule a new job or reschedule an existing job.
 
    Options:
-   `ignore_if_exists`: see above
    `expiry`:
       date after which the job may not start. Possible reasons
       for a delayed start include system downtime
@@ -80,32 +86,13 @@ val default_max_attempts : int
       one hour in the future (from now rather than from the scheduled time).
 *)
 val schedule_job :
-  ?ignore_if_exists:bool ->
   ?expiry:Worker_t.timestamp ->
   ?max_attempts:int ->
+  scheduling_mode ->
   Worker_jobid.t ->
   Worker_t.timestamp (* start time, i.e. when the job should run *) ->
   string (* name of the handler that should handle the job data *) ->
   json (* job data (JSON) *) ->
-  Worker_t.job Lwt.t
-
-(*
-   Replace an existing job with a new specification and new parameters
-   or create a new one.
-
-   All job parameters as reset and the internal counter for
-   the number of attempts is reset to zero.
-
-   See `schedule_job` for scheduling a job for the first time.
-   The meaning of the options is the same as for `schedule_job`.
-*)
-val reschedule_job :
-  ?expiry:Worker_t.timestamp ->
-  ?max_attempts:int ->
-  Worker_jobid.t ->
-  Worker_t.timestamp ->
-  string ->
-  json ->
   Worker_t.job Lwt.t
 
 val register_job_handler :

@@ -74,12 +74,27 @@ let remove_job jobid =
 
 let now () = !scheduler#now ()
 
-let schedule_job_gen
-    ~ignore_if_exists
-    ~reschedule
+type scheduling_mode = [
+  | `New
+  | `Ignore_if_exists
+  | `Reschedule
+]
+
+let schedule_job
     ?expiry
     ?(max_attempts = default_max_attempts)
+    (mode : scheduling_mode)
     jobid start job_type job_spec_json =
+
+  let ignore_if_exists, reschedule =
+    match mode with
+    | `New ->
+        false, false
+    | `Ignore_if_exists ->
+        true, false
+    | `Reschedule ->
+        true, true
+  in
   !scheduler#update_job jobid (function
     | Some job when not reschedule ->
         if ignore_if_exists then
@@ -101,22 +116,6 @@ let schedule_job_gen
         } in
         return (Some job, job)
   )
-
-let schedule_job
-    ?(ignore_if_exists = true)
-    ?expiry
-    ?max_attempts
-    jobid start job_type job_spec_json =
-  schedule_job_gen
-    ~ignore_if_exists
-    ~reschedule: false
-    ?expiry ?max_attempts jobid start job_type job_spec_json
-
-let reschedule_job ?expiry ?max_attempts jobid start job_type job_spec_json =
-  schedule_job_gen
-    ~ignore_if_exists: false (* not applicable *)
-    ~reschedule: true
-    ?expiry ?max_attempts jobid start job_type job_spec_json
 
 let is_expired_at job t =
   match job.expiry with
