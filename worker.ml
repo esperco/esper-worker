@@ -77,7 +77,8 @@ let now () = !scheduler#now ()
 let schedule_job_gen
     ~ignore_if_exists
     ~reschedule
-    ?expiry ?(max_attempts = default_max_attempts)
+    ?expiry
+    ?(max_attempts = default_max_attempts)
     jobid start job_type job_spec_json =
   !scheduler#update_job jobid (function
     | Some job when not reschedule ->
@@ -117,16 +118,22 @@ let reschedule_job ?expiry ?max_attempts jobid start job_type job_spec_json =
     ~reschedule: true
     ?expiry ?max_attempts jobid start job_type job_spec_json
 
+let is_expired_at job t =
+  match job.expiry with
+  | Some expiry ->
+      if Util_time.(<) t expiry then
+        false
+      else
+        true
+  | None ->
+      false
+
 let maybe_retry_later job0 =
   let now = !scheduler#now () in
   let start = Util_time.add now 3600. in (* retry in one hour *)
   let attempts = job0.attempts + 1 in
   let job = { job0 with start; attempts } in
-  let expired =
-    match job.expiry with
-    | Some t when Util_time.(>) start t -> true
-    | _ -> false
-  in
+  let expired = is_expired_at job start in
   if expired || attempts >= job0.max_attempts then (
     (* give up *)
     logf `Error "Giving up on job %s" (Worker_j.string_of_job job);
@@ -155,31 +162,37 @@ let get_job_handler job_type =
 
 let run_job job =
   let jobid = job.jobid in
-  catch
-    (fun () ->
-       let job_type, job_spec = job.action in
-       let job_handler =
-         match get_job_handler job_type with
-         | Some job_handler ->
-             job_handler
-         | None ->
-             failwith ("Unknown job type: " ^ job_type)
-       in
-       Cloudwatch.time "wolverine.worker.job" (fun () ->
-         job_handler jobid job_spec
-       ) >>= fun may_remove_job ->
-       logf `Info "Job completed: %s" (Worker_j.string_of_job job);
-       if may_remove_job then
-         remove_job jobid
-       else
-         return ()
-    )
-    (fun e ->
-       let s = string_of_exn e in
-       logf `Error "Job %s failed with exception %s"
-         (Worker_j.string_of_job job) s;
-       maybe_retry_later job
-    )
+  if is_expired_at job (now ()) then (
+    logf `Error "Job has expired, not running it: %s"
+      (Worker_j.string_of_job job);
+    remove_job jobid
+  )
+  else
+    catch
+      (fun () ->
+         let job_type, job_spec = job.action in
+         let job_handler =
+           match get_job_handler job_type with
+           | Some job_handler ->
+               job_handler
+           | None ->
+               failwith ("Unknown job type: " ^ job_type)
+         in
+         Cloudwatch.time "wolverine.worker.job" (fun () ->
+           job_handler jobid job_spec
+         ) >>= fun may_remove_job ->
+         logf `Info "Job completed: %s" (Worker_j.string_of_job job);
+         if may_remove_job then
+           remove_job jobid
+         else
+           return ()
+      )
+      (fun e ->
+         let s = string_of_exn e in
+         logf `Error "Job %s failed with exception %s"
+           (Worker_j.string_of_job job) s;
+         maybe_retry_later job
+      )
 
 let run_due_jobs () =
   !scheduler#run_due_jobs run_job
