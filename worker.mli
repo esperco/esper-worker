@@ -90,7 +90,8 @@ val run_due_jobs : unit -> unit Lwt.t
      The handler is called as [handler jobid action_type action_details]
      and returns a boolean that indicates whether the job should
      be removed from the table upon success. Returning false
-     allows the job to rescheduled at some future date by the handler itself.
+     allows the job to be rescheduled at some future date
+     by the handler itself.
 
      If the handler raises an exception, the job is removed from the table
      unless it is scheduled for a retry.
