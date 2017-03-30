@@ -1,5 +1,6 @@
 (*
    System for scheduling jobs at specific times in the future.
+   See worker.mli.
 *)
 
 open Printf
@@ -10,6 +11,23 @@ open Worker_t
 type json = string
 
 let default_max_attempts = 5
+
+type scheduling_mode = [
+  | `New
+  | `Ignore_if_exists
+  | `Reschedule
+]
+
+type job_status = [
+  | `OK
+  | `Rescheduled
+  | `Failed
+]
+
+let string_of_job_status : job_status -> string = function
+  | `OK -> "OK"
+  | `Rescheduled -> "Rescheduled"
+  | `Failed -> "Failed"
 
 class scheduler =
   let now () = Util_time.now () in
@@ -73,12 +91,6 @@ let remove_job jobid =
   !scheduler#remove_job jobid
 
 let now () = !scheduler#now ()
-
-type scheduling_mode = [
-  | `New
-  | `Ignore_if_exists
-  | `Reschedule
-]
 
 let schedule_job
     ?expiry
@@ -179,19 +191,25 @@ let run_job job =
          in
          Cloudwatch.time "wolverine.worker.job" (fun () ->
            job_handler jobid job_spec
-         ) >>= fun may_remove_job ->
-         logf `Info "Job completed: %s" (Worker_j.string_of_job job);
-         if may_remove_job then
-           remove_job jobid
-         else
-           return ()
+         )
       )
       (fun e ->
          let s = string_of_exn e in
          logf `Error "Job %s failed with exception %s"
            (Worker_j.string_of_job job) s;
-         maybe_retry_later job
+         return `Failed
       )
+    >>= fun job_status ->
+    logf `Info "Job ended with status %s: %s"
+      (string_of_job_status job_status)
+      (Worker_j.string_of_job job);
+    match job_status with
+    | `OK ->
+        remove_job jobid
+    | `Rescheduled ->
+        return ()
+    | `Failed ->
+        maybe_retry_later job
 
 let run_due_jobs () =
   !scheduler#run_due_jobs run_job

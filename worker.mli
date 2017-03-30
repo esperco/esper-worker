@@ -48,6 +48,21 @@ type json = string
 val default_max_attempts : int
   (* Default value of the `max_attempts` parameter *)
 
+type job_status = [
+  | `OK
+      (* The job ran successfully and should now be removed from the
+         set of scheduled jobs. *)
+
+  | `Rescheduled
+      (* The job was rescheduled using the same job ID
+         and should not be removed from the set of scheduled jobs. *)
+
+  | `Failed
+      (* The job failed and will be retried later if allowed by the
+         job's parameters. This is equivalent to the job raising
+         an exception. *)
+]
+
 type scheduling_mode = [
   | `New
     (* A job with the specified ID must not already exist,
@@ -96,7 +111,7 @@ val schedule_job :
   Worker_t.job Lwt.t
 
 val register_job_handler :
-  string -> (Worker_jobid.t -> json -> bool Lwt.t) -> unit
+  string -> (Worker_jobid.t -> json -> job_status Lwt.t) -> unit
   (* Usage: `register_job_handler job_type handler`.
      The handler interprets the json data of the job specification
      and returns whether the job with this ID should be removed
