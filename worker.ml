@@ -8,8 +8,6 @@ open Log
 open Lwt
 open Worker_t
 
-type json = string
-
 let default_max_attempts = 5
 
 type scheduling_mode = [
@@ -154,24 +152,22 @@ let maybe_retry_later job0 =
     (* retry later *)
     add_job job
 
-let job_handlers = Hashtbl.create 10
+let run_remote_job jobid =
+  let url = Uri.of_string (App_path.Webhook.job_url jobid) in
+  Util_http_client.get url >>= function
+  | `OK, headers, body ->
+      let {Api_t.job_status} = Api_j.job_status_response_of_string body in
+      return job_status
+  | status, headers, body ->
+      let msg =
+        sprintf "Failed worker call: status %s, body: %s"
+          (Cohttp.Code.string_of_status status)
+          body
+      in
+      Apputil_error.report_error "Failed worker call" msg >>= fun () ->
+      return `Failed
 
-let register_job_handler job_type job_handler =
-  if Hashtbl.mem job_handlers job_type then
-    invalid_arg (
-      sprintf
-        "Worker.register_job_handler: a handler for job type %s is \
-         already registered."
-        job_type
-    )
-  else
-    Hashtbl.add job_handlers job_type job_handler
-
-let get_job_handler job_type =
-  try Some (Hashtbl.find job_handlers job_type)
-  with Not_found -> None
-
-let run_job job =
+let order_job job =
   let jobid = job.jobid in
   if is_expired_at job (now ()) then (
     logf `Error "Job has expired, not running it: %s"
@@ -179,27 +175,7 @@ let run_job job =
     remove_job jobid
   )
   else
-    catch
-      (fun () ->
-         let job_type, job_spec = job.action in
-         let job_handler =
-           match get_job_handler job_type with
-           | Some job_handler ->
-               job_handler
-           | None ->
-               failwith ("Unknown job type: " ^ job_type)
-         in
-         Cloudwatch.time "wolverine.worker.job" (fun () ->
-           job_handler jobid job_spec
-         )
-      )
-      (fun e ->
-         let s = string_of_exn e in
-         logf `Error "Job %s failed with exception %s"
-           (Worker_j.string_of_job job) s;
-         return `Failed
-      )
-    >>= fun job_status ->
+    run_remote_job job.jobid >>= fun job_status ->
     logf `Info "Job ended with status %s: %s"
       (string_of_job_status job_status)
       (Worker_j.string_of_job job);
@@ -212,4 +188,4 @@ let run_job job =
         maybe_retry_later job
 
 let run_due_jobs () =
-  !scheduler#run_due_jobs run_job
+  !scheduler#run_due_jobs order_job

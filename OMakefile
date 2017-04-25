@@ -1,11 +1,11 @@
 OCAML_LIBS = $(OCAML_LIBS_worker)
 
 FILES[] =
-  worker_jobid
   worker_t
   worker_j
   worker_v
   worker_access
+  worker_job
   worker
   worker_simulator
   worker_main
