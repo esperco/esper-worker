@@ -154,7 +154,7 @@ let maybe_retry_later job0 =
 
 let run_remote_job jobid =
   let url = Uri.of_string (App_path.Webhook.job_url jobid) in
-  Util_http_client.get url >>= function
+  Util_http_client.post url >>= function
   | `OK, headers, body ->
       let {Api_t.job_status} = Api_j.job_status_response_of_string body in
       return job_status
@@ -175,6 +175,13 @@ let order_job job =
     remove_job jobid
   )
   else
+    (* Track how late jobs run, so we can detect bottlenecks. *)
+    (if job.attempts = 0 then
+       let delay = Unix.gettimeofday () -. Util_time.to_float job.start in
+       Cloudwatch.send "wolverine.worker.job_delay" delay
+    else
+      return ()
+    ) >>= fun () ->
     run_remote_job job.jobid >>= fun job_status ->
     logf `Info "Job ended with status %s: %s"
       (string_of_job_status job_status)
