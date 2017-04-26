@@ -145,6 +145,8 @@ let maybe_retry_later job0 =
   let expired = is_expired_at job start in
   if expired || attempts >= job0.max_attempts then (
     (* give up *)
+    Cloudwatch.send_event "wolverine.worker.job_permanently_failed"
+    >>= fun () ->
     logf `Error "Giving up on job %s" (Worker_j.string_of_job job);
     remove_job job0.jobid
   )
