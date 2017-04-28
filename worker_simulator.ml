@@ -73,6 +73,7 @@ open Lwt
 class scheduler : Worker.scheduler =
   object
     method is_real = false
+    method run_jobs_remotely = false
     method now () = now ()
     method get_job jobid = return (get_job jobid)
     method job_exists jobid = return (job_exists jobid)

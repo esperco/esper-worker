@@ -9,6 +9,7 @@
 class type scheduler =
   object
     method is_real : bool
+    method run_jobs_remotely : bool
     method now : unit -> Util_time.t
     method get_job : Worker_jobid.t -> Worker_t.job option Lwt.t
     method job_exists : Worker_jobid.t -> bool Lwt.t

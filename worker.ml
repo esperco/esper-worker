@@ -8,6 +8,12 @@ open Log
 open Lwt
 open Worker_t
 
+(*
+   Prevent accidental use of `Unix.gettimeofday()` or `Unix.time()`.
+   `now()` should be used instead.
+*)
+module Unix = struct end
+
 let default_max_attempts = 5
 
 type scheduling_mode = [
@@ -31,6 +37,7 @@ class scheduler =
   let now () = Util_time.now () in
   object
     method is_real = true
+    method run_jobs_remotely = true
 
     method now () =
       Util_time.now ()
@@ -154,7 +161,8 @@ let maybe_retry_later job0 =
     (* retry later *)
     add_job job
 
-let run_remote_job jobid =
+let run_remote_job job =
+  let jobid = job.jobid in
   let url = Uri.of_string (App_path.Webhook.job_url jobid) in
   Util_http_client.post url >>= function
   | `OK, headers, body ->
@@ -169,7 +177,7 @@ let run_remote_job jobid =
       Apputil_error.report_error "Failed worker call" msg >>= fun () ->
       return `Failed
 
-let order_job job =
+let order_job run_job job =
   let jobid = job.jobid in
   if is_expired_at job (now ()) then (
     logf `Error "Job has expired, not running it: %s"
@@ -179,12 +187,14 @@ let order_job job =
   else
     (* Track how late jobs run, so we can detect bottlenecks. *)
     (if job.attempts = 0 then
-       let delay = Unix.gettimeofday () -. Util_time.to_float job.start in
+       let delay =
+         Util_time.to_float (now ()) -. Util_time.to_float job.start
+       in
        Cloudwatch.send "wolverine.worker.job_delay" delay
     else
       return ()
     ) >>= fun () ->
-    run_remote_job job.jobid >>= fun job_status ->
+    run_job job >>= fun job_status ->
     logf `Info "Job ended with status %s: %s"
       (string_of_job_status job_status)
       (Worker_j.string_of_job job);
@@ -197,4 +207,9 @@ let order_job job =
         maybe_retry_later job
 
 let run_due_jobs () =
-  !scheduler#run_due_jobs order_job
+  let run_job =
+    match !scheduler#run_jobs_remotely with
+    | true -> run_remote_job
+    | false -> Worker_job.run
+  in
+  !scheduler#run_due_jobs (order_job run_job)
